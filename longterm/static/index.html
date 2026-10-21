@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TQQQ 웅덩이 매수 신호지수</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/app.css?v=51" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="top">
+      <div class="brand">
+        <p class="eyebrow">TQQQ</p>
+        <h1>웅덩이 매수 신호지수</h1>
+      </div>
+      <ol class="zone-guide" aria-label="점수대 설명">
+        <li class="zone-item is-70">
+          <span class="zone-badge">70</span>
+          <div>
+            <strong>걱정만 있던 하락 (소형 웅덩이)</strong>
+            <p>나스닥100 고점 대비 약 7%. 공포는 이틀 만에 식는 경우가 많음</p>
+          </div>
+        </li>
+        <li class="zone-item is-80">
+          <span class="zone-badge">80</span>
+          <div>
+            <strong>실제 사건이 터진 하락 (중형 웅덩이)</strong>
+            <p>고점 대비 약 11%. 공포는 일주일 남짓</p>
+          </div>
+        </li>
+        <li class="zone-item is-90">
+          <span class="zone-badge">90</span>
+          <div>
+            <strong>시장 전체로 번진 충격 (대형 웅덩이)</strong>
+            <p>약 16%, VIX 35 이상. 극단적 공포가 한 달 반 이어짐</p>
+          </div>
+        </li>
+      </ol>
+      <div class="top-actions">
+        <p class="meta" id="updated">데이터 불러오는 중</p>
+        <button type="button" id="refresh" class="ghost">새로고침</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <article class="score-card">
+          <div class="ring" id="ring">
+            <div>
+              <p class="score-label">오늘 점수</p>
+              <p class="score" id="score">--</p>
+              <p class="delta" id="delta"></p>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <p class="zone-pill" id="zone">계산 중</p>
+            <p class="hint" id="hint"></p>
+            <p class="asof" id="asof"></p>
+            <dl class="mini">
+              <div>
+                <dt>TQQQ</dt>
+                <dd id="tqqq">--</dd>
+              </div>
+              <div>
+                <dt>QQQ 고점 대비</dt>
+                <dd id="qqq-dd">--</dd>
+              </div>
+              <div>
+                <dt>CNN</dt>
+                <dd id="cnn">--</dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="side-stack">
+          <div class="panel" id="rate-panel">
+            <h2>미국 10년물 금리</h2>
+            <p class="rate-flag" id="rate-flag">확인 중</p>
+            <dl class="kv">
+              <div><dt>현재</dt><dd id="rate-now">--</dd></div>
+              <div><dt>석 달 고점</dt><dd id="rate-high">--</dd></div>
+              <div><dt>50일 평균</dt><dd id="rate-sma">--</dd></div>
+            </dl>
+            <p class="fine">꺾임 = 석 달 고점 대비 0.25%p 이상 하락, 그리고 50일선 아래.</p>
+          </div>
+          <div class="panel" id="wait-panel">
+            <h2>90점 진입 이후 일수</h2>
+            <p id="wait-copy">지금은 90점 구간이 아닙니다.</p>
+            <div class="days" id="wait-days"></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="split">
+        <article class="panel">
+          <h2>육각형 6칸</h2>
+          <canvas id="radar"></canvas>
+        </article>
+        <article class="panel">
+          <h2>칸별 기여</h2>
+          <div id="bars" class="bars"></div>
+        </article>
+      </section>
+
+      <section class="cards" id="cards"></section>
+
+      <section class="panel chart-panel">
+        <div class="chart-head">
+          <h2>일별 점수</h2>
+          <p>노란 70 · 주황 80 · 빨간 90</p>
+        </div>
+        <canvas id="history"></canvas>
+      </section>
+
+      <section class="split">
+        <article class="panel">
+          <h2>90점 진입일</h2>
+          <table>
+            <thead>
+              <tr><th>날짜</th><th>점수</th><th>TQQQ</th></tr>
+            </thead>
+            <tbody id="ev90"></tbody>
+          </table>
+        </article>
+        <article class="panel">
+          <h2>80점 진입일</h2>
+          <table>
+            <thead>
+              <tr><th>날짜</th><th>점수</th><th>TQQQ</th></tr>
+            </thead>
+            <tbody id="ev80"></tbody>
+          </table>
+        </article>
+      </section>
+
+      <p class="disclaimer" id="disclaimer"></p>
+    </main>
+    <script src="/static/app.js?v=50"></script>
+  </body>
+</html>
