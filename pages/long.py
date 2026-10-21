@@ -12,20 +12,34 @@ LONG = ROOT / "longterm"
 sys.path.insert(0, str(LONG))
 
 from singularity.engine import build_payload  # noqa: E402
-from singularity.market import fetch_market, load_cache  # noqa: E402
+from singularity.market import load_cache, official_closes  # noqa: E402
+from singularity.schedule import current_window_id, refresh_if_due, window_satisfied  # noqa: E402
 
 STATIC = LONG / "static"
 
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(show_spinner="미국 종가를 확인하고 있습니다")
+def _fresh_snapshot(window_id: str) -> dict:
+    """이번 08:00 구간에 종가를 받은 뒤에만 캐시한다. 실패는 캐시하지 않는다."""
+    refresh_if_due()
+    bundle = load_cache()
+    if bundle is None or not window_satisfied(bundle.fetched_at, bundle.sources_ok):
+        raise RuntimeError("이번 아침 종가가 아직 없습니다.")
+    payload = build_payload(official_closes(bundle))
+    payload["stale"] = False
+    payload["window_id"] = window_id
+    return payload
+
+
 def load_snapshot() -> dict:
+    """한국시간 08:00 기준 미국 종가. 화면의 버튼으로는 다시 받지 않는다."""
     try:
-        return build_payload(fetch_market(use_cache_on_error=True))
+        return _fresh_snapshot(current_window_id())
     except Exception:
-        cached = load_cache()
-        if cached is None:
+        bundle = load_cache()
+        if bundle is None:
             raise
-        payload = build_payload(cached)
+        payload = build_payload(official_closes(bundle))
         payload["stale"] = True
         return payload
 
@@ -84,19 +98,15 @@ st.markdown(
 
 top_menu("long")
 
-if st.query_params.get("refresh") == "1":
-    load_snapshot.clear()
-    st.query_params.clear()
-
 try:
     payload = load_snapshot()
 except Exception as exc:
-    st.error("시세를 가져오지 못했습니다. 잠시 뒤 화면의 새로고침을 눌러 주세요.")
+    st.error("시세를 아직 가져오지 못했습니다. 페이지를 다시 열면 이어서 받아 옵니다.")
     st.caption(str(exc))
     st.stop()
 
 if payload.get("stale"):
-    st.warning("최신 시세를 받지 못해, 마지막에 저장해 둔 숫자로 보여주고 있습니다.")
+    st.warning("오늘 아침 종가를 아직 받지 못해, 마지막에 저장해 둔 종가로 보여주고 있습니다.")
 
 st.iframe(
     dashboard_html(payload),

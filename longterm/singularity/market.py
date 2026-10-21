@@ -5,12 +5,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 CACHE_PATH = DATA_DIR / "market_cache.json"
+NY = ZoneInfo("America/New_York")
+# 미국 정규장 마감. 조기 폐장일도 이 시각 이후에는 그날 종가가 확정돼 있다.
+REGULAR_CLOSE = time(16, 0)
 
 YAHOO_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -45,6 +49,20 @@ def _request(url: str, headers: dict[str, str], timeout: int = 30) -> bytes:
         return response.read()
 
 
+def session_is_closed(day: date, now: datetime | None = None) -> bool:
+    """그날 미국 정규장 16:00(뉴욕)이 지났으면 종가가 확정된 것이다."""
+    now_ny = (now or datetime.now(NY)).astimezone(NY)
+    close_at = datetime.combine(day, REGULAR_CLOSE, tzinfo=NY)
+    return now_ny >= close_at
+
+
+def drop_unclosed(points: list[tuple[date, float]], now: datetime | None = None) -> list[tuple[date, float]]:
+    """아직 마감 전인 마지막 봉은 뺀다. 화면 숫자는 항상 확정 종가 기준이다."""
+    if points and not session_is_closed(points[-1][0], now):
+        return points[:-1]
+    return points
+
+
 def fetch_yahoo(symbol: str, rng: str = "5y") -> Series:
     encoded = urllib.parse.quote(symbol)
     url = (
@@ -76,7 +94,7 @@ def fetch_yahoo(symbol: str, rng: str = "5y") -> Series:
             continue
         seen.add(day)
         points.append((day, float(close)))
-    return Series(symbol=symbol, points=points)
+    return Series(symbol=symbol, points=drop_unclosed(points))
 
 
 def fetch_fear_greed() -> dict[date, float]:
@@ -101,6 +119,8 @@ def fetch_fear_greed() -> dict[date, float]:
     if stamp and score is not None:
         day = datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).date()
         out[day] = float(score)
+    for day in [d for d in out if not session_is_closed(d)]:
+        out.pop(day, None)
     return out
 
 
@@ -146,6 +166,19 @@ def load_cache() -> MarketBundle | None:
         },
         fetched_at=payload["fetched_at"],
         sources_ok=payload.get("sources_ok", {}),
+    )
+
+
+def official_closes(bundle: MarketBundle, now: datetime | None = None) -> MarketBundle:
+    """저장된 시세에서도 아직 마감 전인 봉은 빼고 보여 준다."""
+    return MarketBundle(
+        tqqq=Series(bundle.tqqq.symbol, drop_unclosed(bundle.tqqq.points, now)),
+        qqq=Series(bundle.qqq.symbol, drop_unclosed(bundle.qqq.points, now)),
+        vix=Series(bundle.vix.symbol, drop_unclosed(bundle.vix.points, now)),
+        tnx=Series(bundle.tnx.symbol, drop_unclosed(bundle.tnx.points, now)),
+        fear_greed={d: v for d, v in bundle.fear_greed.items() if session_is_closed(d, now)},
+        fetched_at=bundle.fetched_at,
+        sources_ok=bundle.sources_ok,
     )
 
 

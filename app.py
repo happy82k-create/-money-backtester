@@ -1,5 +1,13 @@
 """장기 신호와 단기 백테스트를 상단 메뉴로 묶는 진입점."""
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "longterm"))
+from singularity.schedule import ensure_scheduler  # noqa: E402
+
+ensure_scheduler()
 
 st.set_page_config(
     page_title="TQQQ 투자",

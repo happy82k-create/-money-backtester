@@ -215,20 +215,23 @@ function render(data) {
   renderTable("ev80", data.events_80);
 }
 
-async function load(refresh = false) {
-  if (!refresh && window.__SNAPSHOT) {
-    render(window.__SNAPSHOT);
-    return;
-  }
-  $("updated").textContent = "불러오는 중...";
-  const top = window.parent && window.parent !== window ? window.parent : window;
-  const url = new URL(top.location.href);
-  url.searchParams.set("refresh", "1");
-  top.location.href = url.toString();
+function msUntilKstEight() {
+  const offset = 9 * 60 * 60 * 1000;
+  const view = new Date(Date.now() + offset);
+  const next = new Date(view);
+  next.setUTCHours(8, 0, 0, 0);
+  if (view.getTime() >= next.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - view.getTime();
 }
 
-$("refresh").addEventListener("click", () => load(true));
+function load() {
+  if (!window.__SNAPSHOT) return;
+  render(window.__SNAPSHOT);
+  const wait = msUntilKstEight();
+  setTimeout(() => {
+    const top = window.parent && window.parent !== window ? window.parent : window;
+    top.location.reload();
+  }, wait);
+}
 
-load().catch((err) => {
-  console.error(err);
-});
+load();
