@@ -28,13 +28,61 @@ st.markdown(
     """
     <style>
     .slide-btn { display: none; }
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
     [data-testid="stHeader"],
     [data-testid="stToolbar"],
-    [data-testid="stToolbar"] > div {
-      background: #ffffff !important;
-      background-color: #ffffff !important;
-      border-bottom: none !important;
-      box-shadow: none !important;
+    [data-testid="stBottom"],
+    [data-testid="stBottomBlockContainer"] {
+      background: #071018 !important;
+      color: #e7f2ee !important;
+    }
+    [data-testid="stSidebar"] {
+      background: #0c1a26 !important;
+      color: #e7f2ee !important;
+    }
+    [data-testid="stHeading"] h1,
+    [data-testid="stHeading"] h2,
+    [data-testid="stHeading"] h3,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] strong,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stMetricLabel"],
+    [data-testid="stMetricValue"] {
+      color: #e7f2ee !important;
+    }
+    [data-testid="stMetric"] {
+      background: #122433;
+      border: 1px solid rgba(140, 196, 180, 0.28);
+      border-radius: 12px;
+      padding: 8px 10px 6px;
+    }
+    input, textarea, [data-baseweb="input"], [data-baseweb="select"] > div {
+      background-color: #071018 !important;
+      color: #e7f2ee !important;
+      -webkit-text-fill-color: #e7f2ee !important;
+      border-color: rgba(140, 196, 180, 0.35) !important;
+    }
+    [data-testid="stExpander"] {
+      background: #102433 !important;
+      border: 1px solid rgba(140, 196, 180, 0.28) !important;
+    }
+    .stButton button, .stDownloadButton button {
+      background: #122433 !important;
+      color: #e7f2ee !important;
+      border: 1px solid rgba(226, 195, 107, 0.75) !important;
+    }
+    button[data-baseweb="tab"] { color: #c5d7e2 !important; }
+    button[data-baseweb="tab"][aria-selected="true"] {
+      color: #e2c36b !important;
+      border-bottom-color: #e2c36b !important;
+    }
+    [data-testid="stDataFrame"] {
+      border: 1px solid rgba(140, 196, 180, 0.28);
+      border-radius: 10px;
     }
     .block-container { padding-top: 64px !important; max-width: 1180px; }
     @media (min-width: 1101px) {
@@ -47,7 +95,7 @@ st.markdown(
         width: 320px !important;
         visibility: visible !important;
         position: relative !important;
-        background: #f4f6f8 !important;
+        background: #0c1a26 !important;
         height: 100vh !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
@@ -75,7 +123,7 @@ st.markdown(
         min-height: 0 !important;
         background: transparent !important;
       }
-      .stApp, [data-testid="stAppViewContainer"] { background: #ffffff !important; }
+      .stApp, [data-testid="stAppViewContainer"] { background: #071018 !important; }
       [data-testid="stSidebar"],
       [data-testid="stSidebar"][data-collapsed="true"],
       [data-testid="stSidebar"][data-collapsed="false"] {
@@ -85,7 +133,7 @@ st.markdown(
         overflow-x: hidden !important;
         overflow-y: auto !important;
         z-index: 20 !important;
-        background: #f4f6f8 !important;
+        background: #0c1a26 !important;
         box-shadow: none !important;
         padding-top: 64px !important;
         box-sizing: border-box !important;
@@ -213,15 +261,15 @@ st.markdown(
         line-height: 1.45;
       }
       [data-testid="stMain"] [data-testid="stMetric"] {
-        background: #f4f7fb;
-        border: 1px solid #d9e2ec;
+        background: #122433;
+        border: 1px solid rgba(140, 196, 180, 0.28);
         border-radius: 12px;
         padding: 8px 10px 6px;
       }
       [data-testid="stMain"] [data-testid="stMetricLabel"] {
         font-size: 13px !important;
         white-space: normal !important;
-        color: #243140;
+        color: #e7f2ee !important;
       }
       [data-testid="stMain"] [data-testid="stMetricValue"] {
         font-size: 1.2rem !important;
@@ -253,6 +301,39 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+def darken(fig, **layout):
+    """차트 바탕과 글자를 페이지와 같은 어두운 색으로 맞춘다."""
+    legend = {"font": {"color": "#e7f2ee"}, "bgcolor": "rgba(0,0,0,0)"}
+    if "legend" in layout:
+        legend.update(layout.pop("legend"))
+    fig.update_layout(
+        paper_bgcolor="#071018",
+        plot_bgcolor="#102433",
+        font={"color": "#e7f2ee", "size": 13},
+        legend=legend,
+        **layout,
+    )
+    axis = dict(
+        gridcolor="rgba(140,196,180,0.16)",
+        linecolor="rgba(140,196,180,0.28)",
+        zerolinecolor="rgba(140,196,180,0.28)",
+        tickfont={"color": "#e7f2ee"},
+        title_font={"color": "#e7f2ee"},
+    )
+    fig.update_xaxes(**axis)
+    fig.update_yaxes(**axis)
+    fig.update_annotations(font={"color": "#e7f2ee"})
+    return fig
+
+
+def dark_style(styler):
+    """표 숫자도 어두운 칸 위에서 밝게 보이게 한다."""
+    return styler.set_properties(**{
+        "color": "#e7f2ee",
+        "background-color": "#102433",
+    })
+
 
 @st.cache_data(show_spinner=False)
 def get_prices(ticker: str) -> pd.Series:
@@ -318,8 +399,8 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
                                  line=dict(width=1)), row=2, col=1)
         fig.add_trace(go.Scatter(x=bh.index, y=(bh / bh.cummax() - 1) * 100, name="B&H 낙폭",
                                  line=dict(width=1, dash="dot")), row=2, col=1)
-        fig.update_layout(
-            height=620, hovermode="x unified",
+        darken(
+            fig, height=620, hovermode="x unified",
             legend=dict(orientation="h", y=-0.22), margin=dict(b=70),
         )
         st.plotly_chart(fig, width="stretch")
@@ -330,7 +411,7 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
             "무한매수법 V4": [m["총 수익률(%)"], m["최대 낙폭 MDD(%)"], m["최종 자산"]],
             "Buy & Hold": [m["Buy&Hold 수익률(%)"], m["Buy&Hold MDD(%)"], bh.iloc[-1]],
         }).set_index("")
-        st.dataframe(cmp_df.style.format("{:,.1f}"), width="stretch")
+        st.dataframe(dark_style(cmp_df.style.format("{:,.1f}")), width="stretch")
 
         st.subheader("현금 vs 보유 평가액 · 회차 T")
         fig2 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.65, 0.35], vertical_spacing=0.08,
@@ -338,7 +419,7 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
         fig2.add_trace(go.Scatter(x=res.equity.index, y=res.equity["holdings"], name="보유 평가액", stackgroup="a"), 1, 1)
         fig2.add_trace(go.Scatter(x=res.equity.index, y=res.equity["cash"], name="현금", stackgroup="a"), 1, 1)
         fig2.add_trace(go.Scatter(x=res.equity.index, y=res.equity["T"], name="T", line=dict(width=1.5)), 2, 1)
-        fig2.update_layout(height=460, hovermode="x unified", legend=dict(orientation="h"))
+        darken(fig2, height=460, hovermode="x unified", legend=dict(orientation="h"))
         st.plotly_chart(fig2, width="stretch")
 
     with tab_fills:
@@ -364,13 +445,13 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
                 "avg_after": "평단(후)", "shares_after": "보유(후)", "cash_after": "현금(후)",
                 "pnl": "손익($)", "ret_pct": "수익률(%)",
             })
-            st.dataframe(show.style.format({
+            st.dataframe(dark_style(show.style.format({
                 "체결가": "{:.2f}", "수량": "{:,.0f}", "금액($)": "{:,.2f}",
                 "T(전)": "{:.3f}", "T(후)": "{:.3f}", "별%": "{:.2f}",
                 "별지점": "{:.2f}", "목표가": "{:.2f}", "평단(후)": "{:.2f}",
                 "보유(후)": "{:,.0f}", "현금(후)": "{:,.2f}",
                 "손익($)": "{:,.2f}", "수익률(%)": "{:+.2f}",
-            }, na_rep="-"), width="stretch", height=440)
+            }, na_rep="-")), width="stretch", height=440)
             st.download_button("매수·매도 CSV 다운로드", show.to_csv(index=False).encode("utf-8-sig"),
                                file_name=f"infinite_fills_{ticker}_{n_split}.csv", mime="text/csv")
             sells = ev[ev["pnl"].notna()]
@@ -407,13 +488,13 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
                 "start_cash": "시작 원금($)", "pnl": "손익($)", "ret_pct": "수익률(%)",
                 "max_T": "최대 T", "reverse_used": "리버스", "reverse_days": "리버스 일수",
             })
-            st.dataframe(show.style.format({
+            st.dataframe(dark_style(show.style.format({
                 "시작 원금($)": "{:,.0f}", "손익($)": "{:,.2f}", "수익률(%)": "{:+.2f}", "최대 T": "{:.2f}",
-            }), width="stretch", height=380)
+            })), width="stretch", height=380)
             st.download_button("사이클 CSV 다운로드", show.to_csv(index=False).encode("utf-8-sig"),
                                file_name=f"infinite_cycles_{ticker}_{n_split}.csv", mime="text/csv")
             figc = go.Figure(go.Bar(x=show["사이클"], y=show["수익률(%)"], name="사이클 수익률"))
-            figc.update_layout(height=300, yaxis_title="수익률(%)")
+            darken(figc, height=300, yaxis_title="수익률(%)")
             st.plotly_chart(figc, width="stretch")
         else:
             st.info("완료된 사이클이 없습니다. 기간이 짧거나 아직 청산되지 않았습니다.")
@@ -438,11 +519,11 @@ def render_infinite(res, prices, ticker, capital, n_split, target_pct, iparams):
         st.caption("종목·기간·초기자본·분할 수·고급 설정은 그대로 두고, 지정가 매도 목표만 바꿔 비교합니다.")
         rows = [_row(f"+{tp:g}%", infinite_backtest({**iparams, "target_pct": tp})[0].metrics)
                 for tp in (10.0, 15.0, 20.0)]
-        st.dataframe(pd.DataFrame(rows).style.format(fmt), width="stretch", hide_index=True)
+        st.dataframe(dark_style(pd.DataFrame(rows).style.format(fmt)), width="stretch", hide_index=True)
 
         st.subheader("같은 목표에서 20 / 30 / 40분할")
         rows = [_row(f"{n}분할", infinite_backtest({**iparams, "n": n})[0].metrics) for n in (20, 30, 40)]
-        st.dataframe(pd.DataFrame(rows).style.format(fmt), width="stretch", hide_index=True)
+        st.dataframe(dark_style(pd.DataFrame(rows).style.format(fmt)), width="stretch", hide_index=True)
 
     with tab_rules:
         st.markdown(f"""
@@ -623,8 +704,8 @@ with tab_result:
                              line=dict(width=1)), row=2, col=1)
     fig.add_trace(go.Scatter(x=bh.index, y=(bh / bh.cummax() - 1) * 100, name="B&H 낙폭",
                              line=dict(width=1, dash="dot")), row=2, col=1)
-    fig.update_layout(
-        height=620, hovermode="x unified",
+    darken(
+        fig, height=620, hovermode="x unified",
         legend=dict(orientation="h", y=-0.22), margin=dict(b=70),
     )
     st.plotly_chart(fig, width="stretch")
@@ -635,13 +716,13 @@ with tab_result:
         "떨사오팔": [m["총 수익률(%)"], m["최대 낙폭 MDD(%)"], m["최종 자산"]],
         "Buy & Hold": [m["Buy&Hold 수익률(%)"], m["Buy&Hold MDD(%)"], bh.iloc[-1]],
     }).set_index("")
-    st.dataframe(cmp_df.style.format("{:,.1f}"), width="stretch")
+    st.dataframe(dark_style(cmp_df.style.format("{:,.1f}")), width="stretch")
 
     st.subheader("현금 vs 보유 평가액")
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=res.equity.index, y=res.equity["holdings"], name="보유 평가액", stackgroup="a"))
     fig2.add_trace(go.Scatter(x=res.equity.index, y=res.equity["cash"], name="현금", stackgroup="a"))
-    fig2.update_layout(height=320, hovermode="x unified", legend=dict(orientation="h"))
+    darken(fig2, height=320, hovermode="x unified", legend=dict(orientation="h"))
     st.plotly_chart(fig2, width="stretch")
 
 with tab_trades:
@@ -658,8 +739,8 @@ with tab_trades:
         })
         reasons = st.multiselect("사유 필터", ["익절", "타임컷"], default=["익절", "타임컷"])
         show = show[show["사유"].isin(reasons)]
-        st.dataframe(show.style.format({"진입가": "{:.2f}", "청산가": "{:.2f}", "수량": "{:,.2f}",
-                                          "손익($)": "{:,.2f}", "수익률(%)": "{:+.2f}"}),
+        st.dataframe(dark_style(show.style.format({"진입가": "{:.2f}", "청산가": "{:.2f}", "수량": "{:,.2f}",
+                                          "손익($)": "{:,.2f}", "수익률(%)": "{:+.2f}"})),
                      width="stretch", height=420)
         st.download_button("거래 내역 CSV 다운로드", show.to_csv(index=False).encode("utf-8-sig"),
                            file_name=f"trades_{ticker}.csv", mime="text/csv")
@@ -673,8 +754,8 @@ with tab_trades:
         o["entry_date"] = pd.to_datetime(o["entry_date"]).dt.date
         o = o.rename(columns={"slot": "티어", "entry_date": "진입일", "entry_price": "진입가", "shares": "수량",
                               "hold_days": "보유일", "last_close": "종료일 종가", "unrealized_pct": "평가수익률(%)"})
-        st.dataframe(o.style.format({"진입가": "{:.2f}", "수량": "{:,.2f}", "종료일 종가": "{:.2f}",
-                                       "평가수익률(%)": "{:+.2f}"}), width="stretch")
+        st.dataframe(dark_style(o.style.format({"진입가": "{:.2f}", "수량": "{:,.2f}", "종료일 종가": "{:.2f}",
+                                       "평가수익률(%)": "{:+.2f}"})), width="stretch")
     else:
         st.write("없음")
 
@@ -697,10 +778,10 @@ with tab_compare:
                 "거래 수": mm["총 거래 수(청산)"], "평균 보유일": mm["평균 보유일"],
             })
     cdf = pd.DataFrame(rows)
-    st.dataframe(cdf.style.format({
+    st.dataframe(dark_style(cdf.style.format({
         "익절(%)": "{:.2f}", "최종 자산($)": "{:,.0f}", "총수익(%)": "{:.1f}", "CAGR(%)": "{:.1f}",
         "MDD(%)": "{:.1f}", "승률(%)": "{:.1f}", "타임컷(%)": "{:.1f}", "평균 보유일": "{:.1f}",
-    }), width="stretch", hide_index=True)
+    })), width="stretch", hide_index=True)
 
     st.subheader("진입 방식 비교 (현재 익절·타임컷 기준)")
     rows = []
@@ -712,8 +793,8 @@ with tab_compare:
         mm = r.metrics
         rows.append({"진입": label, "최종 자산($)": mm["최종 자산"], "총수익(%)": mm["총 수익률(%)"],
                      "CAGR(%)": mm["연환산 수익률 CAGR(%)"], "MDD(%)": mm["최대 낙폭 MDD(%)"]})
-    st.dataframe(pd.DataFrame(rows).style.format({"최종 자산($)": "{:,.0f}", "총수익(%)": "{:.1f}",
-                                                    "CAGR(%)": "{:.1f}", "MDD(%)": "{:.1f}"}),
+    st.dataframe(dark_style(pd.DataFrame(rows).style.format({"최종 자산($)": "{:,.0f}", "총수익(%)": "{:.1f}",
+                                                    "CAGR(%)": "{:.1f}", "MDD(%)": "{:.1f}"})),
                  width="stretch", hide_index=True)
 
 HEAT_TP = [0.01, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
@@ -763,14 +844,15 @@ with tab_heat:
         hm = go.Figure(go.Heatmap(
             z=z.values, x=z.columns, y=z.index,
             text=[[fmt.format(v) for v in row] for row in z.values], texttemplate="%{text}",
+            textfont={"color": "#1b1404"},
             colorscale="RdYlGn", reversescale=(pick == "타임컷 비율(%)"), colorbar=dict(title=pick),
         ))
-        hm.update_layout(height=480, xaxis_title="타임컷", yaxis_title="익절", yaxis=dict(autorange="reversed"))
+        darken(hm, height=480, xaxis_title="타임컷", yaxis_title="익절", yaxis=dict(autorange="reversed"))
         st.plotly_chart(hm, width="stretch")
         best_i = z.stack().idxmin() if pick in ("타임컷 비율(%)",) else z.stack().idxmax()
         st.caption(f"'{pick}' 기준 최고 조합: 익절 {best_i[0]} / 타임컷 {best_i[1]} → {fmt.format(z.loc[best_i])}")
         st.caption("⚠️ 가장 좋은 칸만 고르면 과거 데이터에 과적합될 수 있습니다. 주변 칸들도 비슷하게 좋은지(안정적인 영역인지)를 함께 보세요.")
-        st.dataframe(z.style.format(fmt), width="stretch")
+        st.dataframe(dark_style(z.style.format(fmt)), width="stretch")
 
 with tab_rules:
     st.markdown(f"""
