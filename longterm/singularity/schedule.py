@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from singularity.market import DATA_DIR, fetch_market, load_cache
@@ -75,13 +75,23 @@ def _mark_attempt() -> None:
     )
 
 
+def covers_chart(bundle) -> bool:
+    """2023년 1월 차트를 그리려면 그 이전 시세와 CNN 점수가 저장돼 있어야 한다."""
+    if bundle is None or not bundle.tqqq.points or not bundle.fear_greed:
+        return False
+    return bundle.tqqq.points[0][0] <= date(2022, 3, 1) and min(bundle.fear_greed) <= date(2022, 12, 15)
+
+
 def refresh_if_due() -> bool:
-    """이번 8시 구간에 아직 종가가 없으면 받아 온다. 받았으면 False."""
+    """이번 8시 구간에 아직 종가가 없거나 2023년 차트가 안 되면 받아 온다."""
     with _lock:
         cached = load_cache()
-        if cached is not None and window_satisfied(cached.fetched_at, cached.sources_ok):
-            return False
-        if _recent_attempt():
+        ready = (
+            cached is not None
+            and window_satisfied(cached.fetched_at, cached.sources_ok)
+            and covers_chart(cached)
+        )
+        if ready or _recent_attempt():
             return False
         _mark_attempt()
         fetch_market(use_cache_on_error=True)
@@ -93,7 +103,11 @@ def _loop() -> None:
         try:
             refresh_if_due()
             cached = load_cache()
-            ready = cached is not None and window_satisfied(cached.fetched_at, cached.sources_ok)
+            ready = (
+                cached is not None
+                and window_satisfied(cached.fetched_at, cached.sources_ok)
+                and covers_chart(cached)
+            )
         except Exception:
             ready = False
         delay = seconds_until_next_window() if ready else RETRY_MINUTES * 60

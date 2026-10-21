@@ -20,7 +20,8 @@ YAHOO_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
-CNN_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+# 날짜를 붙이면 2022년부터 온다. 2023년 1월 차트의 앞부분 계산에 필요하다.
+CNN_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2022-01-01"
 
 
 @dataclass
@@ -64,10 +65,13 @@ def drop_unclosed(points: list[tuple[date, float]], now: datetime | None = None)
 
 
 def fetch_yahoo(symbol: str, rng: str = "5y") -> Series:
+    del rng  # 차트는 2023년부터라, 이동평균이 가능하도록 2021년부터 고정해서 받는다.
     encoded = urllib.parse.quote(symbol)
+    start = int(datetime(2021, 1, 1, tzinfo=timezone.utc).timestamp())
+    end = int(datetime.now(timezone.utc).timestamp())
     url = (
         "https://query1.finance.yahoo.com/v8/finance/chart/"
-        f"{encoded}?interval=1d&range={rng}&includeAdjustedClose=true"
+        f"{encoded}?interval=1d&period1={start}&period2={end}&includeAdjustedClose=true"
     )
     raw = json.loads(
         _request(

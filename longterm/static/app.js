@@ -118,22 +118,35 @@ function renderRadar(cells) {
 }
 
 function renderHistory(history) {
+  const rows = history.filter((h) => h.date >= "2023-01-01");
   const ctx = $("history").getContext("2d");
   if (historyChart) historyChart.destroy();
   historyChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: history.map((h) => h.date),
+      labels: rows.map((h) => h.date),
       datasets: [
         {
           label: "웅덩이 매수 신호지수",
-          data: history.map((h) => h.score),
+          data: rows.map((h) => h.score),
           borderColor: "#e2c36b",
           backgroundColor: "rgba(226, 195, 107, 0.12)",
           fill: true,
           tension: 0.2,
           pointRadius: 0,
           borderWidth: 2,
+        },
+        {
+          label: "90점 이상",
+          data: rows.map((h) => (h.score >= 90 ? h.score : null)),
+          borderColor: "#e23b3b",
+          backgroundColor: "#e23b3b",
+          spanGaps: false,
+          tension: 0.2,
+          pointRadius: rows.map((h) => (h.score >= 90 ? 2 : 0)),
+          pointHoverRadius: 4,
+          borderWidth: 3,
+          fill: false,
         },
       ],
     },
