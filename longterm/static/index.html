@@ -20,6 +20,7 @@
         <p class="eyebrow">TQQQ</p>
         <h1>웅덩이 매수 신호지수</h1>
       </div>
+      <div class="zone-board">
       <ol class="zone-guide" aria-label="점수대 설명">
         <li class="zone-item is-70">
           <span class="zone-badge">70</span>
@@ -43,13 +44,33 @@
           </div>
         </li>
       </ol>
+      <aside class="index-stack" aria-label="주요 지수">
+        <article class="index-card">
+          <p class="index-name">S&amp;P 500</p>
+          <p class="index-value" id="spx">--</p>
+          <p class="index-date" id="spx-date">종가</p>
+        </article>
+        <article class="index-card">
+          <p class="index-name">나스닥</p>
+          <p class="index-value" id="nasdaq">--</p>
+          <p class="index-date" id="nasdaq-date">종가</p>
+        </article>
+      </aside>
+      </div>
       <div class="top-actions">
         <p class="meta" id="updated">데이터 불러오는 중</p>
-        <p class="fine">매일 한국시간 08:00 · 미국 종가 자동 반영</p>
+        <p class="fine">매일 한국시간 06:30 · 미국 종가 자동 반영</p>
       </div>
     </header>
 
     <main>
+      <section class="news-strip" aria-label="오늘 시장">
+        <div class="news-head">
+          <h2>오늘 시장</h2>
+          <p id="news-date"></p>
+        </div>
+        <ol id="news-lines"></ol>
+      </section>
       <section class="hero">
         <article class="score-card">
           <div class="ring" id="ring">

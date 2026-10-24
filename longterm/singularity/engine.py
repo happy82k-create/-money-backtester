@@ -20,7 +20,7 @@ from singularity.formula import (
     total_score,
     vix_cell,
 )
-from singularity.market import MarketBundle
+from singularity.market import MarketBundle, session_is_closed
 
 SEOUL = ZoneInfo("Asia/Seoul")
 NY = ZoneInfo("America/New_York")
@@ -304,6 +304,73 @@ def _wait_status(history: list[DaySnapshot]) -> dict | None:
     }
 
 
+def _pct_change(series) -> dict | None:
+    if len(series.points) < 2:
+        return None
+    prev_day, prev = series.points[-2]
+    day, curr = series.points[-1]
+    if prev == 0:
+        return None
+    return {"date": day.isoformat(), "prev": prev, "curr": curr, "pct": (curr / prev - 1) * 100}
+
+
+def _index_clause(name: str, pct: float, final: bool, with_prev: bool = True) -> str:
+    ending = "다" if final else "고"
+    if abs(pct) < 0.05:
+        return f"{name}은 전날과 거의 같았{ending}"
+    verb = "올랐" if pct > 0 else "내렸"
+    base = "전날보다 " if with_prev else ""
+    return f"{name}은 {base}{abs(pct):.1f}% {verb}{ending}"
+
+
+def _level_clause(name: str, prev: float, curr: float, digits: int, suffix: str, final: bool, flat: float) -> str:
+    ending = "다" if final else "고"
+    if abs(curr - prev) < flat:
+        return f"{name} {curr:.{digits}f}{suffix}로 거의 그대로였{ending}"
+    verb = "올랐" if curr > prev else "내렸"
+    return f"{name} {prev:.{digits}f}{suffix}에서 {curr:.{digits}f}{suffix}로 {verb}{ending}"
+
+
+def _market_brief(bundle: MarketBundle) -> dict:
+    """지수 결과, 대표 기사 한 줄, 금리·공포 배경을 이어서 보여 준다."""
+    lines: list[dict] = []
+    spx = _pct_change(bundle.spx)
+    nasdaq = _pct_change(bundle.ixic)
+    when = ""
+    if nasdaq and spx:
+        when = nasdaq["date"]
+        lines.append({
+            "text": f"{_index_clause('나스닥', nasdaq['pct'], False)}, {_index_clause('S&P 500', spx['pct'], True, False)}.",
+            "source": "",
+        })
+    story = next((item.get("text", "") for item in bundle.headlines if item.get("text")), "")
+    if story:
+        lines.append({
+            "text": f"이날 가장 크게 다뤄진 이야기는, {story}",
+            "source": "CNBC",
+        })
+    backdrop = []
+    vix = _pct_change(bundle.vix)
+    rate = _pct_change(bundle.tnx)
+    if vix:
+        backdrop.append(_level_clause("공포지수 VIX는", vix["prev"], vix["curr"], 1, "", False, 0.05))
+    if rate:
+        backdrop.append(_level_clause("미국 10년물 금리는", rate["prev"], rate["curr"], 2, "%", True, 0.01))
+    if len(backdrop) == 1:
+        backdrop[0] = backdrop[0][:-1] + "다"
+    if backdrop:
+        lines.append({"text": ", ".join(backdrop) + ".", "source": ""})
+    return {"date": when, "lines": lines}
+
+
+def _index_quote(series) -> dict | None:
+    """그 지수의 마지막 확정 종가. 날짜는 칸에 그대로 적는다."""
+    if not series.points:
+        return None
+    d, value = series.points[-1]
+    return {"value": round(value, 2), "date": d.isoformat()}
+
+
 def build_payload(bundle: MarketBundle) -> dict:
     history = compute_history(bundle)
     if not history:
@@ -311,7 +378,9 @@ def build_payload(bundle: MarketBundle) -> dict:
     latest = history[-1]
     today_ny = datetime.now(NY).date()
     last_day = date.fromisoformat(latest.date)
-    is_intraday = last_day == today_ny
+    # 뉴욕 날짜가 같아도 정규장 16:00이 지났으면 종가다.
+    # 한국시간 아침 6시 30분은 뉴욕이 전날 저녁이라, 날짜만 보면 장중으로 잘못 나온다.
+    is_intraday = last_day == today_ny and not session_is_closed(last_day)
     prev = history[-2] if len(history) >= 2 else None
     payload = {
         "as_of": latest.date,
@@ -328,6 +397,9 @@ def build_payload(bundle: MarketBundle) -> dict:
         "score_delta": round(latest.score - prev.score, 1) if prev else None,
         "zone": _zone(latest.score),
         "tqqq": round(latest.tqqq, 2),
+        "spx": _index_quote(bundle.spx),
+        "nasdaq": _index_quote(bundle.ixic),
+        "market_brief": _market_brief(bundle),
         "qqq": round(latest.qqq, 2) if latest.qqq is not None else None,
         "qqq_drawdown_pct": round(latest.qqq_drawdown_pct, 1)
         if latest.qqq_drawdown_pct is not None

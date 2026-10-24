@@ -194,6 +194,45 @@ function renderHistory(history) {
   });
 }
 
+function renderIndex(valueId, dateId, quote) {
+  if (!quote) {
+    $(valueId).textContent = "--";
+    $(dateId).textContent = "종가 없음";
+    return;
+  }
+  $(valueId).textContent = fmt(quote.value, 2);
+  $(dateId).textContent = `${quote.date} 종가`;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+  }[ch]));
+}
+
+function renderNews(brief) {
+  const list = $("news-lines");
+  const when = $("news-date");
+  const lines = brief && brief.lines ? brief.lines : [];
+  if (!lines.length) {
+    when.textContent = "";
+    list.innerHTML = `<li><span>오늘 시장 요약을 아직 받지 못했습니다.</span></li>`;
+    return;
+  }
+  when.textContent = brief.date || "";
+  list.innerHTML = lines
+    .map((line) => {
+      const source = line.source
+        ? `<span class="news-source">${escapeHtml(line.source)}</span>`
+        : "";
+      return `<li><span>${escapeHtml(line.text)}</span>${source}</li>`;
+    })
+    .join("");
+}
+
 function render(data) {
   zoneClass(data.zone.key);
   $("ring").style.setProperty("--p", data.score);
@@ -205,6 +244,9 @@ function render(data) {
   $("zone").textContent = data.zone.label;
   $("hint").textContent = data.zone.hint;
   $("asof").textContent = `기준 ${data.as_of_label} · 갱신 ${data.fetched_at_kst}`;
+  renderNews(data.market_brief);
+  renderIndex("spx", "spx-date", data.spx);
+  renderIndex("nasdaq", "nasdaq-date", data.nasdaq);
   $("tqqq").textContent = `$${fmt(data.tqqq, 2)}`;
   $("qqq-dd").textContent =
     data.qqq_drawdown_pct == null ? "--" : `${fmt(data.qqq_drawdown_pct, 1)}%`;
@@ -228,11 +270,11 @@ function render(data) {
   renderTable("ev80", data.events_80);
 }
 
-function msUntilKstEight() {
+function msUntilKstRefresh() {
   const offset = 9 * 60 * 60 * 1000;
   const view = new Date(Date.now() + offset);
   const next = new Date(view);
-  next.setUTCHours(8, 0, 0, 0);
+  next.setUTCHours(6, 30, 0, 0);
   if (view.getTime() >= next.getTime()) next.setUTCDate(next.getUTCDate() + 1);
   return next.getTime() - view.getTime();
 }
@@ -240,7 +282,7 @@ function msUntilKstEight() {
 function load() {
   if (!window.__SNAPSHOT) return;
   render(window.__SNAPSHOT);
-  const wait = msUntilKstEight();
+  const wait = msUntilKstRefresh();
   setTimeout(() => {
     const top = window.parent && window.parent !== window ? window.parent : window;
     top.location.reload();

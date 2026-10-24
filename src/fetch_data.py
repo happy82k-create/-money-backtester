@@ -1,7 +1,8 @@
 """SOXL / TQQQ 일별 종가 수집·갱신 스크립트.
 
 - 가격 기준: 분할(split)만 조정, 배당 미반영 (yfinance auto_adjust=False 의 'Close')
-- 시작: 2020-01-01 고정 / 종료: 기본 오늘(미래 날짜는 자동으로 마지막 거래일까지)
+- 시작: 2010-01-01 고정 / 종료: 기본 오늘(미래 날짜는 자동으로 마지막 거래일까지)
+- 상장 전 날짜는 첫 거래일부터 저장된다. SOXL 2010-03-11, TQQQ 2010-02-11.
 - 출력: data/soxl.csv, data/tqqq.csv  (컬럼: date, close)
 - 수집 실패·빈 결과·기존보다 짧은 데이터면 기존 파일을 덮어쓰지 않음
 """
@@ -10,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-START = "2020-01-01"
+START = "2010-01-01"
 TICKERS = ["SOXL", "TQQQ"]
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 

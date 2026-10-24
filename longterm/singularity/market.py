@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import html
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -22,6 +26,18 @@ YAHOO_UA = (
 )
 # 날짜를 붙이면 2022년부터 온다. 2023년 1월 차트의 앞부분 계산에 필요하다.
 CNN_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2022-01-01"
+CNBC_MARKET_URL = "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839069"
+MARKET_WORDS = (
+    "nasdaq", "s&p", "dow", "wall street", "stock", "fed", "federal reserve",
+    "treasury", "yield", "inflation", "cpi", "jobs", "payroll", "recession",
+    "rally", "selloff", "sell-off", "plunge", "surge", "nvidia", "apple",
+    "microsoft", "amazon", "meta", "tesla", "google", "alphabet", "chip",
+    "semiconductor", "tariff", "oil", "crude", "earnings", "market cap", "market-cap",
+)
+QUIET_WORDS = (
+    "mortgage", "refinance", "borrower", "renting", "retire", "401(k)",
+    "credit card", "social security", "what it means for", "how to",
+)
 
 
 @dataclass
@@ -39,9 +55,12 @@ class MarketBundle:
     qqq: Series
     vix: Series
     tnx: Series
+    spx: Series
+    ixic: Series
     fear_greed: dict[date, float]
     fetched_at: str
     sources_ok: dict[str, bool]
+    headlines: list = field(default_factory=list)
 
 
 def _request(url: str, headers: dict[str, str], timeout: int = 30) -> bytes:
@@ -142,6 +161,97 @@ def _deserialize_series(payload: dict) -> Series:
     )
 
 
+def _series_from_cache(payload: dict, key: str, symbol: str) -> Series:
+    raw = payload.get(key)
+    if not raw:
+        return Series(symbol, [])
+    return _deserialize_series(raw)
+
+
+def _headline_score(title: str) -> int:
+    text = title.lower()
+    score = sum(2 for word in MARKET_WORDS if word in text)
+    score -= sum(3 for word in QUIET_WORDS if word in text)
+    if re.match(r"i['’ ]|why i ", text) or " i " in f" {text}":
+        score -= 10
+    return score
+
+
+def _one_korean_line(text: str) -> str:
+    cleaned = html.unescape(text)
+    replacements = {
+        "마켓캡": "시가총액",
+        "마켓 캡": "시가총액",
+        "Apple": "애플",
+        "Nvidia": "엔비디아",
+        "Microsoft": "마이크로소프트",
+        "Amazon": "아마존",
+        "Google": "구글",
+        "Tesla": "테슬라",
+        "베어리쉬": "하락",
+        "스톡": "주식",
+    }
+    for src, dst in replacements.items():
+        cleaned = cleaned.replace(src, dst)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    parts = re.split(r"(?<=[.!?。])\s+", cleaned)
+    line = parts[0].strip() if parts else cleaned
+    return line[:120].rstrip()
+
+
+def _translate_ko(title: str) -> str:
+    query = urllib.parse.quote(html.unescape(title)[:280])
+    url = f"https://api.mymemory.translated.net/get?q={query}&langpair=en|ko"
+    raw = json.loads(_request(url, {"User-Agent": YAHOO_UA, "Accept": "application/json"}, timeout=20).decode())
+    if raw.get("quotaFinished"):
+        raise RuntimeError("번역 한도")
+    text = raw.get("responseData", {}).get("translatedText") or ""
+    line = _one_korean_line(text)
+    if "treasur" in title.lower():
+        line = line.replace("재무부", "미국 국채").replace("이주", "이동")
+    if not line or line.lower() == html.unescape(title).lower():
+        raise RuntimeError("번역 없음")
+    return line
+
+
+def fetch_headlines() -> list[dict]:
+    """그날 CNBC 시장 제목 가운데 대표적인 3개를 한국어 한 줄로 만든다. 링크는 담지 않는다."""
+    raw = _request(CNBC_MARKET_URL, {"User-Agent": YAHOO_UA, "Accept": "application/xml"}, timeout=20)
+    root = ET.fromstring(raw)
+    rows = []
+    for order, item in enumerate(root.iter("item")):
+        title = (item.findtext("title") or "").strip()
+        stamp = item.findtext("pubDate")
+        if not title or not stamp:
+            continue
+        published = parsedate_to_datetime(stamp).astimezone(NY)
+        rows.append({
+            "title": html.unescape(title),
+            "day": published.date().isoformat(),
+            "score": _headline_score(title),
+            "order": order,
+        })
+    if not rows:
+        return []
+    latest = max(row["day"] for row in rows)
+    day_rows = [row for row in rows if row["day"] == latest]
+    day_rows.sort(key=lambda row: (-row["score"], row["order"]))
+    picked = [row for row in day_rows if row["score"] >= 0][:3]
+    for row in day_rows:
+        if len(picked) >= 3:
+            break
+        if row not in picked:
+            picked.append(row)
+    lines = []
+    for row in picked:
+        try:
+            text = _translate_ko(row["title"])
+        except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError, RuntimeError):
+            continue
+        lines.append({"text": text, "source": "CNBC", "date": row["day"]})
+    return lines[:3]
+
+
 def save_cache(bundle: MarketBundle) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -151,7 +261,14 @@ def save_cache(bundle: MarketBundle) -> None:
         "qqq": _serialize_series(bundle.qqq),
         "vix": _serialize_series(bundle.vix),
         "tnx": _serialize_series(bundle.tnx),
+        "spx": _serialize_series(bundle.spx),
+        "ixic": _serialize_series(bundle.ixic),
         "fear_greed": {d.isoformat(): v for d, v in bundle.fear_greed.items()},
+        "headlines": [
+            {"text": item.get("text", ""), "source": "CNBC", "date": item.get("date", "")}
+            for item in bundle.headlines
+            if item.get("text")
+        ],
     }
     CACHE_PATH.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -165,11 +282,18 @@ def load_cache() -> MarketBundle | None:
         qqq=_deserialize_series(payload["qqq"]),
         vix=_deserialize_series(payload["vix"]),
         tnx=_deserialize_series(payload["tnx"]),
+        spx=_series_from_cache(payload, "spx", "^GSPC"),
+        ixic=_series_from_cache(payload, "ixic", "^IXIC"),
         fear_greed={
             date.fromisoformat(k): float(v) for k, v in payload["fear_greed"].items()
         },
         fetched_at=payload["fetched_at"],
         sources_ok=payload.get("sources_ok", {}),
+        headlines=[
+            {"text": item.get("text", ""), "source": "CNBC", "date": item.get("date", "")}
+            for item in payload.get("headlines", [])
+            if isinstance(item, dict) and item.get("text")
+        ],
     )
 
 
@@ -180,9 +304,12 @@ def official_closes(bundle: MarketBundle, now: datetime | None = None) -> Market
         qqq=Series(bundle.qqq.symbol, drop_unclosed(bundle.qqq.points, now)),
         vix=Series(bundle.vix.symbol, drop_unclosed(bundle.vix.points, now)),
         tnx=Series(bundle.tnx.symbol, drop_unclosed(bundle.tnx.points, now)),
+        spx=Series(bundle.spx.symbol, drop_unclosed(bundle.spx.points, now)),
+        ixic=Series(bundle.ixic.symbol, drop_unclosed(bundle.ixic.points, now)),
         fear_greed={d: v for d, v in bundle.fear_greed.items() if session_is_closed(d, now)},
         fetched_at=bundle.fetched_at,
         sources_ok=bundle.sources_ok,
+        headlines=list(bundle.headlines),
     )
 
 
@@ -202,6 +329,8 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
                 "QQQ": cached.qqq,
                 "^VIX": cached.vix,
                 "^TNX": cached.tnx,
+                "^GSPC": cached.spx,
+                "^IXIC": cached.ixic,
             }
             return mapping[symbol]
 
@@ -209,6 +338,8 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
     qqq = grab("QQQ")
     vix = grab("^VIX")
     tnx = grab("^TNX")
+    spx = grab("^GSPC")
+    ixic = grab("^IXIC")
 
     try:
         fear_greed = fetch_fear_greed()
@@ -221,11 +352,23 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
         else:
             fear_greed = cached.fear_greed
 
+    try:
+        headlines = fetch_headlines()
+        headlines_ok = len(headlines) >= 3
+    except (urllib.error.URLError, TimeoutError, ET.ParseError, json.JSONDecodeError) as exc:
+        errors["CNBC"] = str(exc)
+        headlines_ok = False
+        headlines = list(cached.headlines) if cached is not None else []
+    if not headlines and cached is not None:
+        headlines = list(cached.headlines)
+
     bundle = MarketBundle(
         tqqq=tqqq,
         qqq=qqq,
         vix=vix,
         tnx=tnx,
+        spx=spx,
+        ixic=ixic,
         fear_greed=fear_greed,
         fetched_at=datetime.now(timezone.utc).isoformat(),
         sources_ok={
@@ -233,8 +376,12 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
             "QQQ": "QQQ" not in errors,
             "VIX": "^VIX" not in errors,
             "TNX": "^TNX" not in errors,
+            "SPX": "^GSPC" not in errors,
+            "IXIC": "^IXIC" not in errors,
             "CNN": fg_ok,
+            "CNBC": headlines_ok,
         },
+        headlines=headlines,
     )
     save_cache(bundle)
     return bundle

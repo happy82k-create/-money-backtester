@@ -20,7 +20,7 @@ STATIC = LONG / "static"
 
 @st.cache_data(show_spinner="미국 종가를 확인하고 있습니다")
 def _fresh_snapshot(window_id: str) -> dict:
-    """이번 08:00 구간에 종가를 받은 뒤에만 캐시한다. 실패는 캐시하지 않는다."""
+    """이번 06:30 구간에 종가를 받은 뒤에만 캐시한다. 실패는 캐시하지 않는다."""
     refresh_if_due()
     bundle = load_cache()
     if bundle is None or not window_satisfied(bundle.fetched_at, bundle.sources_ok):
@@ -32,7 +32,7 @@ def _fresh_snapshot(window_id: str) -> dict:
 
 
 def load_snapshot() -> dict:
-    """한국시간 08:00 기준 미국 종가. 화면의 버튼으로는 다시 받지 않는다."""
+    """한국시간 06:30 기준 미국 종가. 화면의 버튼으로는 다시 받지 않는다."""
     try:
         return _fresh_snapshot(current_window_id())
     except Exception:
