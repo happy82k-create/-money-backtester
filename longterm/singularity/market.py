@@ -9,7 +9,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -61,6 +61,8 @@ class MarketBundle:
     fetched_at: str
     sources_ok: dict[str, bool]
     headlines: list = field(default_factory=list)
+    # 주봉 (시작일, 시가, 고가, 저가, 종가). CCI 30주를 그리려면 일봉과 따로 둔다.
+    weekly: dict[str, list[tuple[date, float, float, float, float]]] = field(default_factory=dict)
 
 
 def _request(url: str, headers: dict[str, str], timeout: int = 30) -> bytes:
@@ -118,6 +120,59 @@ def fetch_yahoo(symbol: str, rng: str = "5y") -> Series:
         seen.add(day)
         points.append((day, float(close)))
     return Series(symbol=symbol, points=drop_unclosed(points))
+
+
+def week_friday(start: date) -> date:
+    """주봉 시작일이 일요일이든 월요일이든, 그 주의 금요일로 맞춘다."""
+    return start + timedelta(days=(4 - start.weekday()) % 7)
+
+
+def drop_open_weeks(
+    bars: list[tuple[date, float, float, float, float]],
+    now: datetime | None = None,
+) -> list[tuple[date, float, float, float, float]]:
+    """주봉은 그 주 금요일 16:00(뉴욕)이 지난 것만 남긴다."""
+    kept = []
+    for start, open_, high, low, close in bars:
+        if session_is_closed(week_friday(start), now):
+            kept.append((start, open_, high, low, close))
+    return kept
+
+
+def fetch_weekly(symbol: str) -> list[tuple[date, float, float, float, float]]:
+    """QQQ·SOXX 주봉. CCI 30을 최근 30주까지 보여 주려면 2년 이상이 필요하다."""
+    encoded = urllib.parse.quote(symbol)
+    start = int(datetime(2023, 1, 1, tzinfo=timezone.utc).timestamp())
+    end = int(datetime.now(timezone.utc).timestamp())
+    url = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/"
+        f"{encoded}?interval=1wk&period1={start}&period2={end}"
+    )
+    raw = json.loads(
+        _request(url, {"User-Agent": YAHOO_UA, "Accept": "application/json"}).decode()
+    )
+    result = raw["chart"]["result"][0]
+    quote = result["indicators"]["quote"][0]
+    bars: list[tuple[date, float, float, float, float]] = []
+    seen: set[date] = set()
+    for index, stamp in enumerate(result["timestamp"]):
+        open_, high, low, close = (
+            quote["open"][index],
+            quote["high"][index],
+            quote["low"][index],
+            quote["close"][index],
+        )
+        if None in (open_, high, low, close):
+            continue
+        start_day = datetime.fromtimestamp(stamp, timezone.utc).date()
+        bar = (start_day, float(open_), float(high), float(low), float(close))
+        if start_day in seen:
+            bars[-1] = bar
+            continue
+        seen.add(start_day)
+        bars.append(bar)
+    bars.sort(key=lambda row: row[0])
+    return drop_open_weeks(bars)
 
 
 def fetch_fear_greed() -> dict[date, float]:
@@ -269,6 +324,10 @@ def save_cache(bundle: MarketBundle) -> None:
             for item in bundle.headlines
             if item.get("text")
         ],
+        "weekly": {
+            symbol: [[start.isoformat(), open_, high, low, close] for start, open_, high, low, close in bars]
+            for symbol, bars in bundle.weekly.items()
+        },
     }
     CACHE_PATH.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -277,6 +336,12 @@ def load_cache() -> MarketBundle | None:
     if not CACHE_PATH.exists():
         return None
     payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    weekly = {}
+    for symbol, bars in (payload.get("weekly") or {}).items():
+        weekly[symbol] = [
+            (date.fromisoformat(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]))
+            for row in bars
+        ]
     return MarketBundle(
         tqqq=_deserialize_series(payload["tqqq"]),
         qqq=_deserialize_series(payload["qqq"]),
@@ -294,6 +359,7 @@ def load_cache() -> MarketBundle | None:
             for item in payload.get("headlines", [])
             if isinstance(item, dict) and item.get("text")
         ],
+        weekly=weekly,
     )
 
 
@@ -310,6 +376,7 @@ def official_closes(bundle: MarketBundle, now: datetime | None = None) -> Market
         fetched_at=bundle.fetched_at,
         sources_ok=bundle.sources_ok,
         headlines=list(bundle.headlines),
+        weekly={symbol: drop_open_weeks(bars, now) for symbol, bars in bundle.weekly.items()},
     )
 
 
@@ -340,6 +407,15 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
     tnx = grab("^TNX")
     spx = grab("^GSPC")
     ixic = grab("^IXIC")
+
+    weekly: dict[str, list[tuple[date, float, float, float, float]]] = {}
+    cached_weekly = cached.weekly if cached is not None else {}
+    for symbol in ("QQQ", "SOXX"):
+        try:
+            weekly[symbol] = fetch_weekly(symbol)
+        except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as exc:
+            errors[symbol + "_WEEK"] = str(exc)
+            weekly[symbol] = list(cached_weekly.get(symbol, []))
 
     try:
         fear_greed = fetch_fear_greed()
@@ -380,8 +456,11 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
             "IXIC": "^IXIC" not in errors,
             "CNN": fg_ok,
             "CNBC": headlines_ok,
+            "QQQ_WEEK": "QQQ_WEEK" not in errors,
+            "SOXX_WEEK": "SOXX_WEEK" not in errors,
         },
         headlines=headlines,
+        weekly=weekly,
     )
     save_cache(bundle)
     return bundle

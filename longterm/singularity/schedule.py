@@ -83,6 +83,12 @@ def indices_ready(bundle) -> bool:
     return bool(spx and spx.points and ixic and ixic.points)
 
 
+def weekly_ready(bundle) -> bool:
+    """QQQ·SOXX 주봉이 CCI 30과 화면 30주를 같이 그릴 만큼 있어야 한다."""
+    weekly = getattr(bundle, "weekly", None) or {}
+    return all(len(weekly.get(symbol, [])) >= 60 for symbol in ("QQQ", "SOXX"))
+
+
 def headlines_ready(bundle) -> bool:
     """그날 시장을 대표하는 한국어 기사 한 줄이 저장돼 있어야 한다."""
     lines = getattr(bundle, "headlines", None) or []
@@ -106,6 +112,7 @@ def refresh_if_due() -> bool:
             and covers_chart(cached)
             and indices_ready(cached)
             and headlines_ready(cached)
+            and weekly_ready(cached)
         )
         if ready or _recent_attempt():
             return False
@@ -120,6 +127,7 @@ def refresh_if_due() -> bool:
             and covers_chart(latest)
             and indices_ready(latest)
             and headlines_ready(latest)
+            and weekly_ready(latest)
         ):
             _mark_attempt()
         return True
@@ -136,6 +144,7 @@ def _loop() -> None:
                 and covers_chart(cached)
                 and indices_ready(cached)
                 and headlines_ready(cached)
+                and weekly_ready(cached)
             )
         except Exception:
             ready = False

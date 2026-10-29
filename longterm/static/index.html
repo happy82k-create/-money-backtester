@@ -45,16 +45,16 @@
         </li>
       </ol>
       <aside class="index-stack" aria-label="주요 지수">
-        <article class="index-card">
+        <a class="index-card" href="https://finance.yahoo.com/quote/%5EGSPC/chart" target="_blank" rel="noopener noreferrer">
           <p class="index-name">S&amp;P 500</p>
           <p class="index-value" id="spx">--</p>
           <p class="index-date" id="spx-date">종가</p>
-        </article>
-        <article class="index-card">
+        </a>
+        <a class="index-card" href="https://finance.yahoo.com/quote/%5EIXIC/chart" target="_blank" rel="noopener noreferrer">
           <p class="index-name">나스닥</p>
           <p class="index-value" id="nasdaq">--</p>
           <p class="index-date" id="nasdaq-date">종가</p>
-        </article>
+        </a>
       </aside>
       </div>
       <div class="top-actions">
@@ -160,6 +160,15 @@
             <tbody id="ev80"></tbody>
           </table>
         </article>
+      </section>
+
+      <section class="panel trend-board" aria-label="주봉 추세">
+        <div class="chart-head">
+          <h2>주봉 추세</h2>
+          <p>CCI 30 · 0 이상 상승 · 지난주 확정 · 최근 30주</p>
+        </div>
+        <div id="trend-cards"></div>
+        <p class="trend-note">파란 빗금은 CCI가 0 미만인 주이고, 세로선은 하락이 시작된 주입니다.</p>
       </section>
 
       <p class="disclaimer" id="disclaimer"></p>

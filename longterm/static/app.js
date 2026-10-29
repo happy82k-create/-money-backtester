@@ -233,6 +233,50 @@ function renderNews(brief) {
     .join("");
 }
 
+function renderTrend(cards) {
+  const root = $("trend-cards");
+  if (!root) return;
+  if (!cards || !cards.length) {
+    root.innerHTML = `<p class="trend-note">주봉을 아직 받지 못했습니다.</p>`;
+    return;
+  }
+  root.innerHTML = cards.map(renderTrendCard).join("");
+}
+
+function renderTrendCard(card) {
+  const weeks = card.weeks || [];
+  const high = Math.max(...weeks.map((week) => week.high));
+  const low = Math.min(...weeks.map((week) => week.low));
+  const span = high - low || 1;
+  let previousDown = false;
+  const columns = weeks.map((week) => {
+    const down = week.cci < 0;
+    const started = down && !previousDown;
+    previousDown = down;
+    const y = (price) => ((high - price) / span) * 64 + 4;
+    const top = y(week.high);
+    const bottom = y(week.low);
+    const bodyTop = y(Math.max(week.open, week.close));
+    const bodyBottom = y(Math.min(week.open, week.close));
+    const side = week.close >= week.open ? "rise" : "fall";
+    const sign = down ? "neg" : "pos";
+    const klass = `trend-col${down ? " down" : ""}${started ? " start" : ""}`;
+    const cci = `${week.cci > 0 ? "+" : ""}${week.cci}`;
+    return `<div class="${klass}"><div class="trend-date">${escapeHtml(week.label)}</div>
+      <div class="trend-candle"><div class="trend-wick" style="top:${top.toFixed(1)}px;height:${Math.max(1, bottom - top).toFixed(1)}px"></div>
+      <div class="trend-body ${side}" style="top:${bodyTop.toFixed(1)}px;height:${Math.max(2, bodyBottom - bodyTop).toFixed(1)}px"></div></div>
+      <div class="trend-cci ${sign}">${cci}</div><div class="trend-mark ${sign}"></div></div>`;
+  }).join("");
+  const direction = card.direction === "down" ? "down" : "up";
+  const word = direction === "down" ? "하락" : "상승";
+  return `<article class="trend-card ${direction}">
+    <div class="trend-head"><div class="trend-name">${escapeHtml(card.symbol)}</div>
+    <div class="trend-signal"><span class="trend-point">${fmt(card.close, 2)}</span><div class="trend-pill">${word}</div></div></div>
+    <p class="trend-judge">판단 CCI <b>${card.cci > 0 ? "+" : ""}${card.cci}</b> · ${escapeHtml(card.as_of_label)}</p>
+    <div class="trend-scroll"><div class="trend-cols">${columns}</div></div>
+  </article>`;
+}
+
 function render(data) {
   zoneClass(data.zone.key);
   $("ring").style.setProperty("--p", data.score);
@@ -268,6 +312,7 @@ function render(data) {
   renderHistory(data.history);
   renderTable("ev90", data.events_90);
   renderTable("ev80", data.events_80);
+  renderTrend(data.weekly_trend);
 }
 
 function msUntilKstRefresh() {

@@ -20,7 +20,7 @@ from singularity.formula import (
     total_score,
     vix_cell,
 )
-from singularity.market import MarketBundle, session_is_closed
+from singularity.market import MarketBundle, session_is_closed, week_friday
 
 SEOUL = ZoneInfo("Asia/Seoul")
 NY = ZoneInfo("America/New_York")
@@ -363,6 +363,60 @@ def _market_brief(bundle: MarketBundle) -> dict:
     return {"date": when, "lines": lines}
 
 
+def _weekly_cci(bars: list[tuple]) -> list[float | None]:
+    """주봉 CCI 30. 대표값의 30주 평균에서 얼마나 떨어졌는지다."""
+    period = 30
+    typical = [(bar[2] + bar[3] + bar[4]) / 3 for bar in bars]
+    values: list[float | None] = []
+    for index in range(len(bars)):
+        if index + 1 < period:
+            values.append(None)
+            continue
+        window = typical[index + 1 - period : index + 1]
+        average = sum(window) / period
+        deviation = sum(abs(price - average) for price in window) / period
+        values.append(None if deviation == 0 else (typical[index] - average) / (0.015 * deviation))
+    return values
+
+
+def _weekly_trend(bundle: MarketBundle) -> list[dict]:
+    """QQQ와 SOXX의 최근 30주. 방향은 마지막 확정 주봉 CCI가 0 이상이면 상승이다."""
+    cards = []
+    for symbol in ("QQQ", "SOXX"):
+        bars = list(bundle.weekly.get(symbol, []))
+        paired = [
+            (bar, value)
+            for bar, value in zip(bars, _weekly_cci(bars))
+            if value is not None
+        ]
+        if len(paired) < 30:
+            continue
+        shown = paired[-30:]
+        last_bar, last_value = shown[-1]
+        last_cci = int(round(last_value))
+        friday = week_friday(last_bar[0])
+        weeks = []
+        for bar, value in shown:
+            ended = week_friday(bar[0])
+            weeks.append({
+                "label": f"{ended.month}/{ended.day}",
+                "open": round(bar[1], 2),
+                "high": round(bar[2], 2),
+                "low": round(bar[3], 2),
+                "close": round(bar[4], 2),
+                "cci": int(round(value)),
+            })
+        cards.append({
+            "symbol": symbol,
+            "direction": "up" if last_cci >= 0 else "down",
+            "close": round(last_bar[4], 2),
+            "cci": last_cci,
+            "as_of_label": f"{friday.month}월 {friday.day}일 주봉",
+            "weeks": weeks,
+        })
+    return cards
+
+
 def _index_quote(series) -> dict | None:
     """그 지수의 마지막 확정 종가. 날짜는 칸에 그대로 적는다."""
     if not series.points:
@@ -400,6 +454,7 @@ def build_payload(bundle: MarketBundle) -> dict:
         "spx": _index_quote(bundle.spx),
         "nasdaq": _index_quote(bundle.ixic),
         "market_brief": _market_brief(bundle),
+        "weekly_trend": _weekly_trend(bundle),
         "qqq": round(latest.qqq, 2) if latest.qqq is not None else None,
         "qqq_drawdown_pct": round(latest.qqq_drawdown_pct, 1)
         if latest.qqq_drawdown_pct is not None
