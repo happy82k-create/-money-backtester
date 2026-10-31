@@ -486,14 +486,8 @@ def build_payload(bundle: MarketBundle) -> dict:
             }
             for s in history
         ],
-        "disclaimer": (
-            "테스프레소 영상 설명을 재구성한 학습용 점수입니다. "
-            "RSI 0점(70)은 영상에 명시되지 않아 추정했습니다. 투자 조언이 아닙니다."
-        ),
-        "formula_note": (
-            "가중치: 하락률 30%, 주간 RSI 20%, VIX 15%, 200일선 15%, "
-            "일간 RSI 10%, CNN 공포탐욕 10%."
-        ),
+        "disclaimer": "투자조언이 아닙니다. 참고자료입니다.",
+        "formula_note": "",
     }
     payload["rate"]["yield_10y"] = round(payload["rate"]["yield_10y"], 3)
     payload["rate"]["high_3m"] = round(payload["rate"]["high_3m"], 3)

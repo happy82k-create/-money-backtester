@@ -296,7 +296,7 @@ function render(data) {
     data.qqq_drawdown_pct == null ? "--" : `${fmt(data.qqq_drawdown_pct, 1)}%`;
   $("cnn").textContent = fmt(data.raw.fear_greed, 1);
   $("updated").textContent = data.fetched_at_kst;
-  $("disclaimer").textContent = `${data.disclaimer} ${data.formula_note}`;
+  $("disclaimer").textContent = data.disclaimer;
 
   const broken = data.rate.broken;
   $("rate-flag").textContent = broken ? "금리 꺾임" : "아직 안 꺾임";
