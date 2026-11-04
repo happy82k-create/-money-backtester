@@ -13,6 +13,7 @@ sys.path.insert(0, str(LONG))
 
 from singularity.engine import build_payload  # noqa: E402
 from singularity.market import load_cache, official_closes  # noqa: E402
+from singularity.qqq_charts import build_chart, last_bar_label  # noqa: E402
 from singularity.schedule import current_window_id, refresh_if_due, window_satisfied  # noqa: E402
 
 STATIC = LONG / "static"
@@ -81,7 +82,7 @@ st.markdown(
     }
     .block-container {
       padding-top: 64px !important;
-      padding-bottom: 0;
+      padding-bottom: 1.5rem;
       max-width: 1180px;
     }
     [data-testid="stMainBlockContainer"] {
@@ -91,6 +92,44 @@ st.markdown(
     [data-testid="stHeader"] { display: none; }
     iframe { background: #071018 !important; border: 0; }
     footer { visibility: hidden; height: 0; }
+    .qqq-ha-head {
+      margin: 18px 0 0;
+      padding: 16px 16px 10px;
+      background: #0d1822;
+      border: 1px solid rgba(140, 196, 180, 0.16);
+      border-bottom: 0;
+      border-radius: 14px 14px 0 0;
+    }
+    .qqq-ha-head h2 {
+      margin: 0 0 4px;
+      color: #e2c36b;
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      font-family: "IBM Plex Sans KR", sans-serif;
+    }
+    .qqq-ha-head p {
+      margin: 0;
+      color: #8aa39a;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      font-family: "IBM Plex Sans KR", sans-serif;
+    }
+    div[data-testid="stPlotlyChart"]:has(#qqq_ha_bottom),
+    div[data-testid="stElementContainer"]:has(.js-plotly-plot) {
+      margin-top: 0 !important;
+    }
+    [data-testid="stPlotlyChart"] {
+      background: #0d1822;
+      border: 1px solid rgba(140, 196, 180, 0.16);
+      border-top: 0;
+      border-radius: 0 0 14px 14px;
+      padding: 0 6px 8px;
+      margin-top: 0 !important;
+    }
+    [data-testid="stPlotlyChart"] .modebar-btn path {
+      fill: #8aa39a !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -113,3 +152,30 @@ st.iframe(
     height="content",
     alt="TQQQ 웅덩이 매수 신호지수",
 )
+
+cached = load_cache()
+qqq_bars = list(official_closes(cached).daily_ohlc.get("QQQ", [])) if cached is not None else []
+chart = build_chart(qqq_bars) if qqq_bars else None
+if chart is not None:
+    st.markdown(
+        f"""
+        <div class="qqq-ha-head">
+          <h2>QQQ 일봉 · 헤이킨 아시</h2>
+          <p>마지막 봉 {last_bar_label(qqq_bars)} · 최근 1년 · 실제 일봉과 헤이킨 아시 · 한국시간 06:30 갱신</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.plotly_chart(
+        chart,
+        width="stretch",
+        theme=None,
+        key="qqq_ha_bottom",
+        config={
+            "scrollZoom": False,
+            "displaylogo": False,
+            "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+        },
+    )
+elif payload.get("stale"):
+    st.caption("QQQ 일봉 차트를 아직 받지 못했습니다. 페이지를 다시 열면 이어서 받아 옵니다.")

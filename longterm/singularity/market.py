@@ -63,6 +63,8 @@ class MarketBundle:
     headlines: list = field(default_factory=list)
     # 주봉 (시작일, 시가, 고가, 저가, 종가). CCI 30주를 그리려면 일봉과 따로 둔다.
     weekly: dict[str, list[tuple[date, float, float, float, float]]] = field(default_factory=dict)
+    # QQQ 일봉 OHLC. 실제 일봉·헤이킨 아시 차트용. 2020년부터 받아 20·50일선을 그린다.
+    daily_ohlc: dict[str, list[tuple[date, float, float, float, float]]] = field(default_factory=dict)
 
 
 def _request(url: str, headers: dict[str, str], timeout: int = 30) -> bytes:
@@ -139,14 +141,12 @@ def drop_open_weeks(
     return kept
 
 
-def fetch_weekly(symbol: str) -> list[tuple[date, float, float, float, float]]:
-    """QQQ·SOXX 주봉. CCI 30을 최근 30주까지 보여 주려면 2년 이상이 필요하다."""
+def _ohlc_bars(symbol: str, start: datetime, interval: str) -> list[tuple[date, float, float, float, float]]:
     encoded = urllib.parse.quote(symbol)
-    start = int(datetime(2023, 1, 1, tzinfo=timezone.utc).timestamp())
     end = int(datetime.now(timezone.utc).timestamp())
     url = (
         "https://query1.finance.yahoo.com/v8/finance/chart/"
-        f"{encoded}?interval=1wk&period1={start}&period2={end}"
+        f"{encoded}?interval={interval}&period1={int(start.timestamp())}&period2={end}"
     )
     raw = json.loads(
         _request(url, {"User-Agent": YAHOO_UA, "Accept": "application/json"}).decode()
@@ -172,7 +172,29 @@ def fetch_weekly(symbol: str) -> list[tuple[date, float, float, float, float]]:
         seen.add(start_day)
         bars.append(bar)
     bars.sort(key=lambda row: row[0])
+    return bars
+
+
+def drop_open_days(
+    bars: list[tuple[date, float, float, float, float]],
+    now: datetime | None = None,
+) -> list[tuple[date, float, float, float, float]]:
+    """일봉도 마감 전 봉은 뺀다."""
+    if bars and not session_is_closed(bars[-1][0], now):
+        return bars[:-1]
+    return bars
+
+
+def fetch_weekly(symbol: str) -> list[tuple[date, float, float, float, float]]:
+    """QQQ·SOXX 주봉. CCI 30을 최근 30주까지 보여 주려면 2년 이상이 필요하다."""
+    bars = _ohlc_bars(symbol, datetime(2023, 1, 1, tzinfo=timezone.utc), "1wk")
     return drop_open_weeks(bars)
+
+
+def fetch_daily_ohlc(symbol: str) -> list[tuple[date, float, float, float, float]]:
+    """QQQ 일봉 OHLC. 20·50일선과 헤이킨 아시를 위해 2020년부터 받는다."""
+    bars = _ohlc_bars(symbol, datetime(2020, 1, 1, tzinfo=timezone.utc), "1d")
+    return drop_open_days(bars)
 
 
 def fetch_fear_greed() -> dict[date, float]:
@@ -328,20 +350,28 @@ def save_cache(bundle: MarketBundle) -> None:
             symbol: [[start.isoformat(), open_, high, low, close] for start, open_, high, low, close in bars]
             for symbol, bars in bundle.weekly.items()
         },
+        "daily_ohlc": {
+            symbol: [[day.isoformat(), open_, high, low, close] for day, open_, high, low, close in bars]
+            for symbol, bars in bundle.daily_ohlc.items()
+        },
     }
     CACHE_PATH.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _bars_from_cache(payload: dict, key: str) -> dict[str, list[tuple[date, float, float, float, float]]]:
+    out: dict[str, list[tuple[date, float, float, float, float]]] = {}
+    for symbol, bars in (payload.get(key) or {}).items():
+        out[symbol] = [
+            (date.fromisoformat(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]))
+            for row in bars
+        ]
+    return out
 
 
 def load_cache() -> MarketBundle | None:
     if not CACHE_PATH.exists():
         return None
     payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-    weekly = {}
-    for symbol, bars in (payload.get("weekly") or {}).items():
-        weekly[symbol] = [
-            (date.fromisoformat(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]))
-            for row in bars
-        ]
     return MarketBundle(
         tqqq=_deserialize_series(payload["tqqq"]),
         qqq=_deserialize_series(payload["qqq"]),
@@ -359,7 +389,8 @@ def load_cache() -> MarketBundle | None:
             for item in payload.get("headlines", [])
             if isinstance(item, dict) and item.get("text")
         ],
-        weekly=weekly,
+        weekly=_bars_from_cache(payload, "weekly"),
+        daily_ohlc=_bars_from_cache(payload, "daily_ohlc"),
     )
 
 
@@ -377,6 +408,7 @@ def official_closes(bundle: MarketBundle, now: datetime | None = None) -> Market
         sources_ok=bundle.sources_ok,
         headlines=list(bundle.headlines),
         weekly={symbol: drop_open_weeks(bars, now) for symbol, bars in bundle.weekly.items()},
+        daily_ohlc={symbol: drop_open_days(bars, now) for symbol, bars in bundle.daily_ohlc.items()},
     )
 
 
@@ -416,6 +448,14 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
         except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as exc:
             errors[symbol + "_WEEK"] = str(exc)
             weekly[symbol] = list(cached_weekly.get(symbol, []))
+
+    daily_ohlc: dict[str, list[tuple[date, float, float, float, float]]] = {}
+    cached_daily = cached.daily_ohlc if cached is not None else {}
+    try:
+        daily_ohlc["QQQ"] = fetch_daily_ohlc("QQQ")
+    except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as exc:
+        errors["QQQ_DAY"] = str(exc)
+        daily_ohlc["QQQ"] = list(cached_daily.get("QQQ", []))
 
     try:
         fear_greed = fetch_fear_greed()
@@ -458,9 +498,11 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
             "CNBC": headlines_ok,
             "QQQ_WEEK": "QQQ_WEEK" not in errors,
             "SOXX_WEEK": "SOXX_WEEK" not in errors,
+            "QQQ_DAY": "QQQ_DAY" not in errors,
         },
         headlines=headlines,
         weekly=weekly,
+        daily_ohlc=daily_ohlc,
     )
     save_cache(bundle)
     return bundle
