@@ -89,12 +89,6 @@ def weekly_ready(bundle) -> bool:
     return all(len(weekly.get(symbol, [])) >= 60 for symbol in ("QQQ", "SOXX"))
 
 
-def qqq_daily_ready(bundle) -> bool:
-    """QQQ 일봉 OHLC가 20·50일선과 최근 1년 차트를 그릴 만큼 있어야 한다."""
-    daily = getattr(bundle, "daily_ohlc", None) or {}
-    return len(daily.get("QQQ", [])) >= 200
-
-
 def headlines_ready(bundle) -> bool:
     """그날 시장을 대표하는 한국어 기사 한 줄이 저장돼 있어야 한다."""
     lines = getattr(bundle, "headlines", None) or []
@@ -119,7 +113,6 @@ def refresh_if_due() -> bool:
             and indices_ready(cached)
             and headlines_ready(cached)
             and weekly_ready(cached)
-            and qqq_daily_ready(cached)
         )
         if ready or _recent_attempt():
             return False
@@ -135,7 +128,6 @@ def refresh_if_due() -> bool:
             and indices_ready(latest)
             and headlines_ready(latest)
             and weekly_ready(latest)
-            and qqq_daily_ready(latest)
         ):
             _mark_attempt()
         return True
@@ -153,7 +145,6 @@ def _loop() -> None:
                 and indices_ready(cached)
                 and headlines_ready(cached)
                 and weekly_ready(cached)
-                and qqq_daily_ready(cached)
             )
         except Exception:
             ready = False

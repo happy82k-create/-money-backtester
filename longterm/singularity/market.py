@@ -191,9 +191,10 @@ def fetch_weekly(symbol: str) -> list[tuple[date, float, float, float, float]]:
     return drop_open_weeks(bars)
 
 
-def fetch_daily_ohlc(symbol: str) -> list[tuple[date, float, float, float, float]]:
-    """QQQ 일봉 OHLC. 20·50일선과 헤이킨 아시를 위해 2020년부터 받는다."""
-    bars = _ohlc_bars(symbol, datetime(2020, 1, 1, tzinfo=timezone.utc), "1d")
+def fetch_daily_ohlc(symbol: str, months: int = 18) -> list[tuple[date, float, float, float, float]]:
+    """QQQ 일봉 OHLC. 차트는 최근 1년만 그리므로 앞여유만 짧게 받는다."""
+    start = datetime.now(timezone.utc) - timedelta(days=max(30, months) * 31)
+    bars = _ohlc_bars(symbol, start, "1d")
     return drop_open_days(bars)
 
 
@@ -449,14 +450,6 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
             errors[symbol + "_WEEK"] = str(exc)
             weekly[symbol] = list(cached_weekly.get(symbol, []))
 
-    daily_ohlc: dict[str, list[tuple[date, float, float, float, float]]] = {}
-    cached_daily = cached.daily_ohlc if cached is not None else {}
-    try:
-        daily_ohlc["QQQ"] = fetch_daily_ohlc("QQQ")
-    except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as exc:
-        errors["QQQ_DAY"] = str(exc)
-        daily_ohlc["QQQ"] = list(cached_daily.get("QQQ", []))
-
     try:
         fear_greed = fetch_fear_greed()
         fg_ok = True
@@ -498,11 +491,11 @@ def fetch_market(use_cache_on_error: bool = True) -> MarketBundle:
             "CNBC": headlines_ok,
             "QQQ_WEEK": "QQQ_WEEK" not in errors,
             "SOXX_WEEK": "SOXX_WEEK" not in errors,
-            "QQQ_DAY": "QQQ_DAY" not in errors,
         },
         headlines=headlines,
         weekly=weekly,
-        daily_ohlc=daily_ohlc,
+        # 차트용 일봉은 qqq_charts 쪽에서 따로 받아, 아침 필수 갱신을 무겁게 만들지 않는다.
+        daily_ohlc={},
     )
     save_cache(bundle)
     return bundle
