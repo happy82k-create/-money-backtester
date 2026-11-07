@@ -477,14 +477,11 @@ def build_payload(bundle: MarketBundle) -> dict:
         "wait": _wait_status(history),
         "events_90": _first_cross_events(history, 90),
         "events_80": _first_cross_events(history, 80),
+        # 화면 점수 차트는 2023년부터 score만 쓴다. cells·tqqq를 빼 첫 로딩 용량을 줄인다.
         "history": [
-            {
-                "date": s.date,
-                "score": round(s.score, 1),
-                "tqqq": round(s.tqqq, 2),
-                "cells": {k: round(v, 1) for k, v in s.cells.items()},
-            }
+            {"date": s.date, "score": round(s.score, 1)}
             for s in history
+            if s.date >= "2023-01-01"
         ],
         "disclaimer": "투자조언이 아닙니다. 참고자료입니다.",
         "formula_note": "",

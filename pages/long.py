@@ -13,7 +13,6 @@ sys.path.insert(0, str(LONG))
 
 from singularity.engine import build_payload  # noqa: E402
 from singularity.market import load_cache, official_closes  # noqa: E402
-from singularity.qqq_charts import build_chart, last_bar_label, load_qqq_chart_bars  # noqa: E402
 from singularity.schedule import current_window_id, refresh_if_due, window_satisfied  # noqa: E402
 
 STATIC = LONG / "static"
@@ -36,6 +35,8 @@ def _fresh_snapshot(window_id: str) -> dict:
 def _qqq_chart_bars(window_id: str) -> list[tuple]:
     """점수판 갱신과 분리. 같은 06:30 구간에서는 다시 받지 않는다."""
     del window_id
+    from singularity.qqq_charts import load_qqq_chart_bars
+
     return load_qqq_chart_bars()
 
 
@@ -64,12 +65,9 @@ def dashboard_html(payload: dict) -> str:
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     {css}
-    html, body {{ background: #071018; }}
+    html, body {{ background: #071018; font-family: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
@@ -289,6 +287,8 @@ if not show_chart:
             st.rerun()
 else:
     with st.spinner("QQQ 차트를 받는 중"):
+        from singularity.qqq_charts import build_chart, last_bar_label
+
         try:
             qqq_bars = _qqq_chart_bars(payload.get("window_id") or current_window_id())
         except Exception:

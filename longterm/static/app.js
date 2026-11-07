@@ -69,15 +69,9 @@ function renderTable(id, rows) {
 }
 
 function renderWait(wait) {
-  const days = $("wait-days");
-  days.innerHTML = [1, 2, 3, 4, 5]
+  $("wait-days").innerHTML = [1, 2, 3, 4, 5]
     .map((n) => `<span class="${wait && wait.days >= n ? "done" : ""}">${n}일</span>`)
     .join("");
-  if (!wait) {
-    $("wait-copy").textContent = "지금은 90점 구간이 아닙니다.";
-    return;
-  }
-  $("wait-copy").textContent = wait.label;
 }
 
 function renderRadar(cells) {
