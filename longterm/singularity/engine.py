@@ -123,7 +123,7 @@ def _zone(score: float) -> dict:
         return {
             "key": "buy",
             "label": "90점대 · 대형 웅덩이",
-            "hint": "큰 위기의 바닥 근처로 보는 구간입니다. 영상 원칙은 첫날 바로 사지 않고 3~5거래일을 기다립니다.",
+            "hint": "큰 위기의 바닥 근처로 보는 구간입니다. 첫날 바로 사지 않고 3~5거래일을 기다린 뒤 분할 매수합니다.",
         }
     if score >= 80:
         return {
@@ -299,7 +299,7 @@ def _wait_status(history: list[DaySnapshot]) -> dict | None:
         "active": True,
         "since": start,
         "days": days,
-        "label": f"90점 구간 {days}거래일째. 영상 원칙은 3~5거래일 후 분할 매수.",
+        "label": f"90점 구간 {days}거래일째. 3~5거래일 후 분할 매수.",
         "ready": days >= 3,
     }
 
